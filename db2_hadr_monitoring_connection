@@ -1,7 +1,7 @@
 #!/usr/bin/ksh
 #
 # Purpose: DB2 HADR connection status check
-# Author: Hendrawan
+# Installed on host which can monitor both DB2 nodes, witness
 #
 # global variable
 _dbname="DB2INSTANCE_NAME"
