@@ -1,5 +1,8 @@
 #!/bin/bash
-
+#
+# Purpose: Ceph Deep Scrubbing Manually, tested and working on giant, you need put this on crontab.
+# Disable the deep scrub as well - ref: https://access.redhat.com/solutions/2981321
+#
 set -o nounset
 set -o errexit
 
@@ -11,7 +14,6 @@ DATE=/bin/date
 SED=/bin/sed
 GREP=/bin/grep
 PYTHON=/usr/bin/python
-
 
 #What string does match a deep scrubing state in ceph pg's output?
 DEEPMARK="scrubbing+deep"
