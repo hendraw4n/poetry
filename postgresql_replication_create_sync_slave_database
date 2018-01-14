@@ -1,0 +1,72 @@
+#!/bin/bash -x
+#
+# Purpose: Create slave database and then sync postgresql data from master, running on slave server
+# Author: Hendrawan
+# Env: Rhel, CentOS v 7, Postgresql v 9.3
+
+PG_DATA=/var/lib/pgsql/9.3/data
+PG_PORT=5432
+PG_MASTER=<ip database master>
+PG_BIN=/usr/pgsql-9.3/bin
+PG_REPS_USER=replikasi
+PG_DATA_ARCH=/var/lib/pgsql/9.3/data/archive
+PG_TEMPLATE=/var/lib/pgsql/9.3/scripts/templates
+
+clear
+read -r -p "
+Do you wish to create standby postgresql database?
+Kindly noted, This will remove existing postgres database..
+Are you sure? [Y/n] " input
+case $input in
+    [yY][eE][sS]|[yY])
+echo "Shutdown PostgreSQL service.."
+systemctl stop postgresql-9.3
+
+if [ $? != 0 ]; then
+    pkill postgres
+    echo "Could not shut down PostgreSQL. Aborting."
+    exit 1
+fi
+echo "Remove PostgreSQL existing datadir.."
+rm -rf $PG_DATA
+
+if [ $? != 0 ]; then
+    echo "Could not remove the PostgreSQL $PG_DATA dir. Aborting."
+    exit 1
+fi
+
+echo "Starting retrieve data from PostgreSQL Master Database.."
+su - postgres -c "$PG_BIN/pg_basebackup --pgdata=$PG_DATA --host=$PG_MASTER --port=$PG_PORT --username=$PG_REPS_USER --xlog-method=stream --format=plain --progress --verbose"
+
+echo "Building recovery.conf file for PostgreSQL Slave Database.."
+rm -f $PG_DATA/recovery.done
+cd $PG_DATA
+cat > recovery.conf << EOT
+standby_mode = 'on'
+primary_conninfo = 'host=$PG_MASTER port=$PG_PORT user=$PG_REPS_USER'
+restore_command = 'cp /var/lib/pgsql/9.3/data/archive/%f %p'
+trigger_file = '/tmp/postgresql.trigger.$PG_PORT'
+EOT
+chown postgres:postgres $PG_DATA/recovery.conf
+
+cp -p $PG_DATA/postgresql.conf $PG_DATA/postgresql.conf.bak
+# Un-comment following if using postgresql.conf as a template, instead using sed
+# cp -p $PG_TEMPLATE/postgresql.conf_slave_COC $PG_DATA/postgresql.conf
+sed -i 's/#*hot_standby = off/hot_standby = on/g' $PG_DATA/postgresql.conf
+rm -f $PG_DATA/postgresql.conf.bak
+rm -f $PG_DATA/postmaster.pid
+
+echo "Starting PostgreSQL service.."
+echo "Bringing up Slave Database.."
+systemctl start postgresql-9.3
+su - postgres -c "$PG_BIN/psql -d postgres -U postgres -qXc 'select pg_is_in_recovery() as is_pg_in_recovery'"
+exit 0
+;;
+    [nN][oO]|[nN])
+        exit 1
+        ;;
+    *)
+        echo "Invalid input..."
+        exit 1
+        ;;
+esac
