@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# Purpose: Check MySQL Replication, Broken or not
+# Installed on host that can be monitoring both MySQL node, witness
+#
+_host_A=hostA_ipAddress
+_host_B=hostB_ipAddress
+_user=replicator
+_password=justrandompassword
+_emails="admin@example.com dba@example.com"
+#
+_msg_A=`mysql -h $_host_A -u$_user -p$_password -e 'show slave status\G' | grep Last_SQL_Error | sed -e 's/ *Last_SQL_Error: //'`
+_msg_B=`mysql -h $_host_B -u$_user -p$_password -e 'show slave status\G' | grep Last_SQL_Error | sed -e 's/ *Last_SQL_Error: //'`
+if [ -n "$_msg_A" ]; then
+    echo "Last SQL Error : $_msg_A" |  mail -s "MySQL Host A Replication Broken" $_emails
+fi
+if [ -n "$_msg_B" ]; then
+    echo "Last SQL Error : $_msg_B" |  mail -s "MySQL Host B Replication Broken" $_emails
+fi
+# EOF
