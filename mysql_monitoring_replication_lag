@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# Purpose: MySQL replication lag monitoring
+
+### VARIABLES ###
+SERVER=locahost
+USER=replicator
+PASS=randompasswordgenerator
+SECONDS_BEHIND_MASTER=`/usr/bin/mysql -u $USER -p$PASS -e "SHOW SLAVE STATUS\G"| grep "Seconds_Behind_Master" | awk -F": " {' print $2 '}`
+SENTFILE_BROKEN=/tmp/mysql_slaverep_broken.sent
+SENTFILE_BEHIND=/tmp/mysql_slaverep_behind.sent
+MAIL=alert@example.com
+
+### CHECK FOR REPLICATION BREAK ###
+if [ "$SECONDS_BEHIND_MASTER" == "NULL" ]; then
+        # Slave replication is broken
+
+        if [ ! -f $SENTFILE_BROKEN ]; then
+                touch $SENTFILE_BROKEN
+                echo "Slave replication broken on $SERVER" | mail -s "Slave replication broken on $SERVER" $MAIL
+        fi
+else
+        # Slave replication is not broken
+
+        if [ -f $SENTFILE_BROKEN ]; then
+                echo "Slave replication has been restored on $SERVER"
+                rm $SENTFILE_BROKEN
+        fi
+
+        ### CHECK FOR REPLICATION DELAY ###
+        if [ "$SECONDS_BEHIND_MASTER" -gt "60" ]; then
+                # Slave replication is delayed
+
+                if [ ! -f $SENTFILE_BEHIND ]; then
+                        touch $SENTFILE_BEHIND
+                        echo "Slave replication is $SECONDS_BEHIND_MASTER seconds behind master on $SERVER" | mail -s "Slave replication is $SECONDS_BEHIND_MASTER seconds behind master on $SER
+VER" $MAIL
+                fi
+        else
+                # Slave replication is not delayed
+
+                if [ -f $SENTFILE_BEHIND ]; then
+                        echo "Slave replication delay has been recovered and is now $SECONDS_BEHIND_MASTER seconds behind master on $SERVER"
+                        rm $SENTFILE_BEHIND
+                fi
+        fi
+
+fi
