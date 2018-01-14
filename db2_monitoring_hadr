@@ -1,0 +1,23 @@
+#!/usr/bin/ksh
+# Monitoring DB2 HADR status
+
+# global variable
+_dbname="DB2INSTANCE_NAME"
+_output_dir="$HOME/scripts"
+_output_file="hadr_status.txt"
+_subject="HADR Status"
+_rcpt="hendraw4n@gmail.com"
+_now="$(date +"%Y-%m-%d-%T")"
+
+# Monitoring
+db2 get snapshot for database on $_dbname | awk '/HADR Status/,/^$/ { print $0}'> $_output_dir/$_output_file
+READ=`cat $_output_dir/$_output_file |grep "Connection status"| awk '{print $4}'| awk -F "," '{print $1}'`
+
+if [ "$READ" == "Connected" ]; then
+        echo "$_now >> [Connection status : $READ]"
+                elif [ "$READ" == "Congested" ]; then
+                echo "$_now >> [Connection status : $READ]"
+        else
+        echo "$_now >> [Connection status : $READ]"
+        cat $_output_dir/$_output_file | mailx -s "$_subject" $_rcpt
+fi
