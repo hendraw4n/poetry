@@ -1,0 +1,93 @@
+#!/bin/bash
+#
+# Purpose: VM Full Backup, - Initial, September, 2013
+# 		                     - update at September 10, 2013
+# Author: Hendrawan
+
+# Start parameters
+#=================================================================
+machine=$1
+
+date=`date +%Y%m%d`
+month=`date | awk -F" " '{print $2}'`
+day=`date | awk -F" " '{print $3}'`
+live_image="/vmdata1/live/images"
+backup_dir="/vmbackup/live/backup/images/$month/$day"
+config_backup_dir="/vmbackup/live/backup/config"
+logs="/vmbackup/live/backup/logs/$machine.$date.log"
+VIRSH="/usr/bin/virsh"
+CP="/bin/cp"
+#
+# End parameters
+#=================================================================
+
+# Date
+print_date() {
+    date +'%Y-%m-%d %H:%M:%S'
+}
+
+# Logging
+Write_Log()
+{
+echo `date +"%Y-%m-%d %H:%M:%S"` - "$1" >> $logs
+}
+
+if [[ ! -d ${backup_dir} ]];
+ then
+mkdir -p ${backup_dir}
+fi
+    
+Write_Log "Backing up VM configuration"
+if [[ ! -d ${config_backup_dir}/${machine} ]];
+ then
+mkdir -p ${config_backup_dir}/${machine}
+fi
+
+$VIRSH dumpxml $machine > $config_backup_dir/$machine/${machine}_$date.xml
+
+Write_Log "Sending suspend signal to $machine"
+$VIRSH suspend $machine
+echo "   Return code: $?"
+   
+echo -n "Waiting for $machine to suspend "
+   for i in 1 2 3
+   do
+      echo -n "."
+      $VIRSH list | grep -v "^$" | grep -v "^ Id" | grep -v "\-\-\-\-\-" | awk '{print $2" "$3}' | grep $machine | while read name state
+      do
+         if [[ $state -eq "running" ]]
+         then
+            sleep 2
+         fi
+      done
+   done
+
+Write_Log "Copying disk"
+disk=`ls $live_image| grep $machine`
+copy_disk="$backup_dir/`echo $disk`_$date"
+
+Write_Log "Copying $disk to $copy_disk"
+Write_Log "Copy started at `print_date`"
+$CP $live_image/$disk $copy_disk
+if [ $? -ne 0 ]; then 
+    Write_Log "Copy error, Return code: $?"
+    Write_Log "Copy ended at `print_date`"
+    Write_Log "Copy failed, Backup error, Starting machine $machine at `print_date`"
+    $VIRSH resume $machine
+    echo "Backup error, continue to Starting machine $machine at `print_date`"| mailx -s "Backup error, continue to starting machine $machine at `print_date`" sysadmin@exampe.com -- -f vm.backup@example.com
+    exit 1
+else
+Write_Log "Copy ended, Backup completed  at `print_date`"
+Write_Log "Starting machine $machine at `print_date`"
+$VIRSH resume $machine
+ if [ $? -ne 0 ]; then
+    Write_Log "Resume machine error, Return code: $?"
+    echo "Resume VM $machine error at `print_date`"| mailx -s "Resume $machine error at `print_date`" sysadmin@example.com -- -f vm.backup@example.com
+    exit 1
+ else
+   Write_Log "Starting machine $machine completed at `print_date`"
+   echo "Full VM backup completed, Starting machine $machine completed at `print_date`"| mailx -s "Full VM backup completed, Starting machine $machine completed at `print_date`" sysadmin@example.com -- -f vm.backup@example.com
+
+ fi
+fi
+# End
