@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Purpose: MySQL replication lag monitoring
+# Author: Hendrawan
 
 ### VARIABLES ###
 SERVER=locahost
