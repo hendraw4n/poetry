@@ -2,6 +2,7 @@
 #
 # Purpose: Check MySQL Replication, Broken or not
 # Installed on host that can be monitoring both MySQL node, witness
+# Author: Hendrawan
 #
 _host_A=hostA_ipAddress
 _host_B=hostB_ipAddress
