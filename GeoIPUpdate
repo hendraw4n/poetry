@@ -1,6 +1,7 @@
 #!/bin/bash
 # 
 # Purpose: GeoIP Update every Month, scheduling with crontab
+# Author: Hendrawan
 
 GEOIP_MIRROR="http://geolite.maxmind.com/download/geoip/database"
 GEOIPDIR=/usr/share/GeoIP
