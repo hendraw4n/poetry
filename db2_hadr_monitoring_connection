@@ -2,6 +2,7 @@
 #
 # Purpose: DB2 HADR connection status check
 # Installed on host which can monitor both DB2 nodes, witness
+# Author: Hendrawan
 #
 # global variable
 _dbname="DB2INSTANCE_NAME"
