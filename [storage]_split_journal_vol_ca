@@ -1,0 +1,86 @@
+#!/usr/bin/ksh
+#
+# Purpose: Split if JVOL Status reach the certain threshold
+# Author: Hendrawan
+# Environment: HP-UX 11.31
+
+#-- Global/Main Variable
+export HORCMINST=_put_your_horcm_instance_number
+HORCC_RSYN=QUICK
+CAGRP=_put_your_cag_group_number
+JNUM=_put_your_journal_number
+DAT=`date '+%Y%m%d_%H%M'`
+LOGFILE="/tmp/CALOGS/JNL_$JNUM-$CAGRP_$DAT.log"
+touch $LOGFILE
+#-- End of Main Variable
+
+CHKJL=`/HORCM/usr/bin/pairdisplay -g $CAGRP -v jnl $JNUM |awk '{print $6}'|grep -v U|head -1`
+STATE=`/HORCM/usr/bin/pairdisplay -g $CAGRP -v jnl $JNUM`
+CHKCPY=`/HORCM/usr/bin/pairdisplay -g $CAGRP -fc|grep -i copy|wc -l`
+PS=`ps -ef|grep "pairsplit -g $CAGRP -rw"|grep -v grep|wc -l`
+PSTATE=`ps -ef|grep "pairsplit -g $CAGRP -rw"|grep -v grep`
+PSTIME=`ps -ef|grep "pairsplit -g $CAGRP -rw"|grep -v grep|awk '{print $5}'`
+
+if [ $CHKJL -ge 20  ] && [ $CHKCPY -gt 0 ];
+then
+	echo >>$LOGFILE
+  echo "PairStatus JVOL at $DAT" >>$LOGFILE
+  echo "$STATE" >>$LOGFILE
+  echo >>$LOGFILE
+	echo "$CAGRP - JVOL UTILIZATION is HIGHS, still some copy running, Starting Split HORCMINST $HORCMINST for $CAGRP at $DAT" >>$LOGFILE
+	echo "Command: pairsplit -g $CAGRP -rw" >>$LOGFILE
+	mailx -s "$CAGRP - JVOL UTILIZATION is HIGH, Starting Split HORCMINST $HORCMINST for $CAGRP" -r sysadmin@example.com sysadmin@example.org
+	/HORCM/usr/bin/pairsplit -g $CAGRP -rw >>$LOGFILE
+	echo "END Split $CAGRP at $DAT" >>$LOGFILE
+	echo >>$LOGFILE
+elif [ $CHKJL -ge 20 ] && [ $CHKCPY -eq 0 ];
+then
+  echo >>$LOGFILE
+  echo "PairStatus JVOL at $DAT" >>$LOGFILE
+  echo "$STATE" >>$LOGFILE
+  echo >>$LOGFILE
+	echo "$CAGRP - JVOL UTILIZATION is HIGH, no copy state, Starting Split HORCMINST $HORCMINST for $CAGRP at $DAT" >>$LOGFILE
+  echo "Command: pairsplit -g $CAGRP -rw" >>$LOGFILE
+	mailx -s "$CAGRP - JVOL UTILIZATION is HIGH, Starting Split HORCMINST $HORCMINST for $CAGRP" -r sysadmin@example.com sysadmin@example.org
+	/HORCM/usr/bin/pairsplit -g $CAGRP -rw >>$LOGFILE
+  echo "END Split $CAGRP at $DAT" >>$LOGFILE
+  echo >>$LOGFILE
+	echo "$STATE" >>$LOGFILE
+  echo >>$LOGFILE
+else
+  echo >>$LOGFILE
+  echo "JVOL Status at $DAT" >>$LOGFILE
+  echo "$STATE" >>$LOGFILE
+  echo >>$LOGFILE
+fi
+
+STATE2=`/HORCM/usr/bin/pairdisplay -g $CAGRP -fc`
+CHKSUS=`/HORCM/usr/bin/pairdisplay -g $CAGRP -fc | grep SUS | wc -l`
+CHKPAIR=`/HORCM/usr/bin/pairdisplay -g $CAGRP -fc | grep PAIR | wc -l`
+
+if [ $CHKSUS -gt 0 ] && [ $CHKPAIR -gt 0 ] && [ $CHKCPY -gt 0 ];
+then
+  echo >>$LOGFILE
+  echo "All not in PSUS" >>$LOGFILE
+  echo "$STATE2" >>$LOGFILE
+  echo >>$LOGFILE
+elif [ $CHKSUS -gt 0 ] && [ $CHKPAIR -eq 0 ] && [ $CHKCPY -eq 0 ];
+then
+	echo >>$LOGFILE
+	echo "$CAGRP - All on PSUS, Starting Sync HORCMINST $HORCMINST for $CAGRP at $DAT" >>$LOGFILE
+  echo "Command: pairresync -g $CAGRP -c 15" >>$LOGFILE
+	mailx -s "$CAGRP - All on PSUS, Starting Sync HORCMINST $HORCMINST for $CAGRP" -r sysadmin@example.com sysadmin@example.org
+	/HORCM/usr/bin/pairresync -g $CAGRP -c 15 >>$LOGFILE
+  echo >>$LOGFILE
+	echo "$STATE2" >>$LOGFILE
+  echo >>$LOGFILE
+	echo "END Sync $CAGRP at $DAT" >>$LOGFILE
+	mailx -s "$CAGRP - End Sync HORCMINST $HORCMINST for $CAGRP" -r sysadmin@example.com sysadmin@example.org
+	echo >>$LOGFILE
+else
+	echo >>$LOGFILE
+	echo "Pairdisplay at $DAT" >>$LOGFILE
+	echo "$STATE2" >>$LOGFILE
+	echo >>$LOGFILE
+fi
+exit 0
