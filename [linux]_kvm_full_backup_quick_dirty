@@ -1,7 +1,8 @@
 #!/bin/bash
 #
-# Purpose: VM Full Backup, - Initial, September, 2013
-# 		                     - update at September 10, 2013
+# Purpose: KVM geust Full Backup
+# - Initial, September, 2013
+# - Update at September 10, 2013
 # Author: Hendrawan
 
 # Start parameters
