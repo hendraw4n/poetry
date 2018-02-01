@@ -1,0 +1,37 @@
+#!/bin/bash
+#
+# Purpose: Check how many Nproc running on system and send alert if reach treshold
+# Author: Hendrawan
+
+# Variable
+HOST=`hostname`
+TRESHOLD=40
+FROM="NPROC_ALERT@example.com"
+SENDTO="sysadmin@example.com"
+max_pid=$(cat /proc/sys/kernel/pid_max)
+cur_pid=$(ps -eLf | wc -l)
+
+PERCENTAGE=`echo "100 * $cur_pid / $max_pid" | bc`
+
+body_mail(){
+        echo "Number of proccess reach $PERCENTAGE% on $HOST, please check.." >> /tmp/messages
+        echo "Current proccess: $cur_pid "  >> /tmp/messages
+        echo "Maximum proccess: $max_pid" >> /tmp/messages
+        echo "" >> /tmp/messages
+        echo "Nproc Users" >> /tmp/messages
+        echo "---------------" >> /tmp/messages
+        /bin/ps -eLf | awk '{print $1}' | sort -r | uniq -c | sort -rn | head -10 >> /tmp/messages
+}
+
+if [ "$PERCENTAGE" -gt "$TRESHOLD" ]; then
+        body_mail
+        /bin/ps -eLf >> /tmp/ps-`date +%d%m%Y-%H%M`.txt
+        /bin/date >> /tmp/ps.txt
+        echo "++ Reach Treshold ++" >> /tmp/ps.txt
+        echo "Current proccess: $cur_pid " >> /tmp/ps.txt
+        echo "Percentage proccess: $PERCENTAGE %" >> /tmp/ps.txt
+        cat /tmp/messages | /bin/mailx -s "NPROC Alert Monitor at `hostname`" $SENDTO -- -f $FROM
+        echo "" > /tmp/messages
+else
+        exit 1
+fi
