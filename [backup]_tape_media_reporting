@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Purpose: Quick and Drity Tape Media Report, running this script from monitoring server
+# Author : Hendrawan
+# Environment: HP-UX, HP Data Protector
+#
+DAT="`date +%Y.%m.%d`"
+DATA="/tmp/Tape_Data_$DAT.log"
+RESULT="/tmp/Tape_Status_Result_$DAT.log"
+#
+for i in 1
+do
+echo "        Tape Status on `date`              "
+echo "==========================================="
+echo
+echo
+echo "Tape Status for ESL Library - DC SITE"
+echo "---------------------------   ------------"
+# make sure publickey has been settle on media/backup server
+ssh mediaserver.example.com /opt/omni/bin/omnirpt -report media_list 2>>/dev/null |grep 'E-Series' >$DATA
+# adjust based on output, following is just example
+printf "%-15s%-11s%-11s%-12s%-11s\n" Volume_Pool Used_Media Free_Media Total_Media Poor_Media
+# Put HPDP backup policy here
+for P in daily weekly monthly permanent databases applications
+do
+    TOTAL=`grep $P $DATA | wc -l | awk '{print $1}'`
+    USED=`grep $P $DATA | grep -v None | wc -l | awk '{print $1}'`
+    FREE=`grep $P $DATA | grep None | wc -l | awk '{print $1}'`
+    POOR=`grep $P $DATA | grep Poor | wc -l | awk '{print $1}'`
+    printf "%-18s%-12s%-11s%-10s%-10s\n" $P $USED $FREE $TOTAL $POOR
+done
+echo
+echo
+done >$RESULT
+rm $DATA
