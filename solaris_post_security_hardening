@@ -1,0 +1,357 @@
+#!/bin/sh
+
+# Author: Hendrawan
+# Purpose: Post Security Hardening for compliance
+# 1. Hardening with JumpStart Architecture and Security Scripts (JASS) in the begining
+# 2. Use this sript for finishing
+# Environment: Solaris 10
+
+# Global Variable
+DT="`date +%d-%m-%y`"
+
+echo "=================================================="
+echo "Starting Additional Hardening Script"
+echo "=================================================="
+echo
+echo
+
+##
+# /etc/default/login
+##
+echo "=================================================="
+echo "Custom /etc/default/login"
+echo "=================================================="
+logn="/etc/default/login"
+cp -p $logn $logn.$DT
+sed 's/#.*CONSOLE=/CONSOLE=/g' $logn.$DT > $logn
+echo "SLEEPTIME=4" >> $logn
+echo "TIMEOUT=120" >> $logn
+chmod 444 $logn
+chown root:sys $logn
+echo
+
+##
+# Remove Rhosts
+##
+echo "=================================================="
+echo "Remove remote hosts files"
+echo "=================================================="
+for rhost in /.rhosts /.shosts /etc/hosts.equiv
+do
+if [ -f $rhost ];
+then
+	rm $rhost
+else
+   echo "[NOTE] There's no /.rhosts /.shosts /etc/hosts.equiv files"
+fi
+done
+echo
+
+##
+# Home directory for root
+## 
+echo "=================================================="
+echo "Create root home directory"
+echo "=================================================="
+rdir="/root"
+if [ -d $rdir ];
+then
+  echo '[NOTE] Root Directory exist!, Copy .profile started'
+  cp -p $rdir/.profile $rdir/.profile-SSTK
+  cp -p /.profile* $rdir
+  cp -p `ls -latr $rdir/.profile.JASS* |awk '{print $9}'` $rdir/.profile
+else
+  echo '[NOTE] No Home Directory for root'
+  echo '[NOTE] Starting to Create /root directory'
+  /usr/sbin/passmgmt -m -h $rdir root
+  mkdir $rdir
+  chmod 700 $rdir
+  mv /.[a-zA-Z]* $rdir
+  mv /Desktop /Documents $rdir
+fi
+echo
+
+##
+# Access Control
+##
+echo "=================================================="
+echo "Fix access control"
+echo "=================================================="
+chmod 600 /var/adm/messages
+chmod 600 /var/log/syslog
+chmod 600 /etc/pam.conf
+chmod 600 /etc/syslog.conf
+chmod 700 /etc/rc0.d
+chmod 700 /etc/rc1.d
+chmod 700 /etc/rc2.d
+chmod 700 /etc/rcS.d
+find /var/sadm/patch \( -nouser -o -nogroup \) -exec chown root:other {} \;
+chown root /devices/pseudo/pts\@0\:7
+
+##
+# HOME DIR : Remove rwx permission
+##
+if [ -d /var/empty ];
+then
+	chmod o-rwx /var/empty
+else	
+	echo "[NOTE] No /var/empty directory found"
+fi
+
+awk -F":" '{ print $6 }' /etc/passwd | grep home > /tmp/_pass
+if [ `cat /tmp/_pass |wc -l` = 0 ]
+then
+ echo "[NOTE] No Home Directory change..."
+else
+ cat /tmp/_pass |awk '{print "chmod o-rwx " $1}'|sh
+fi
+rm /tmp/_pass
+echo
+
+if [ -d /var/webconsole/tmp ];
+then
+	chmod +t /var/webconsole/tmp
+else
+	echo "[NOTE] /var/webconsole/tmp not found"
+fi
+if [ -f /usr/lib/webconsole/adminverifier ];
+then
+	chmod -s /usr/lib/webconsole/adminverifier 
+else 
+	echo "[NOTE] /usr/lib/webconsole/adminverifier not found"
+fi
+if [ -f /usr/lib/fbconfig/SUNWnfb_config ];
+then
+	chmod -s /usr/lib/fbconfig/SUNWnfb_config 
+else
+	echo "[NOTE] /usr/lib/fbconfig/SUNWnfb_config not found"
+fi
+	if [ -f /var/webconsole/tmp ];
+then
+	chmod -s /usr/dt/bin/dtfile
+else
+	echo "[NOTE] /usr/dt/bin/dtfile not found"
+fi	
+echo
+
+## 
+# SSH
+##
+echo "=================================================="
+echo "Add Secure param on Ssh Config"
+echo "=================================================="
+sshd="/etc/ssh/sshd_config"
+cp -p $sshd $sshd.$DT
+if [ "`grep -v '^#' $sshd | grep 'PrintMotd no'`" ]; 
+then 
+	echo "[NOTE] PrintMotd already set to=NO"
+		if [ ! "`grep -v '^#' $sshd | grep 'PrintMotd no'`" ];
+		then	
+			echo "PrintMotd no" >> $sshd
+		fi
+			if [ "`grep -v '^#' $sshd | grep 'PrintMotd yes'`" ];
+			then
+				sed 's/PrintMotd yes/PrintMotd no/g' $sshd.$DT > $sshd
+			fi
+fi
+if [ "`grep -v '^#' $sshd | grep 'LoginGraceTime 600'`" ];
+then 
+	sed 's/LoginGraceTime 600/LoginGraceTime 120/g' $sshd.$DT > $sshd
+		if [ "`grep -v '^#' $sshd | grep 'LoginGraceTime 120'`" ];
+		then
+			echo "[NOTE] LoginGraceTime already set to=120"
+		fi
+fi
+if [ ! "`grep -v '^#' $sshd | grep 'PrintLastLog yes'`" ];
+then
+	echo "PrintLastLog yes" >> $sshd
+else	
+	echo "[NOTE] PrintLastLog already added"
+fi
+if [ ! "`grep -v '^#' $sshd | grep 'UseLogin no'`" ];
+then
+	echo "UseLogin no" >> $sshd
+else	
+	echo "[NOTE] UseLogin already added"
+fi
+if [ ! "`grep -v '^#' $sshd | grep 'HostbasedAuthentication no'`" ];
+then
+	echo "HostbasedAuthentication no" >> $sshd
+else
+	echo "[NOTE] HostbasedAuthentication already added"
+fi
+
+chmod 644 $sshd
+chown root:sys $sshd
+echo "Refresh ssh daemon"
+/usr/sbin/svcadm -v refresh ssh
+echo
+
+##
+# Syslogd
+## 
+echo "=================================================="
+echo "Disable remote logging"
+echo "=================================================="
+slogd="/etc/default/syslogd"
+cp -p $slogd $slogd.$DT
+sed 's/#LOG_FROM_REMOTE=YES/LOG_FROM_REMOTE=NO/g' $slogd.$DT > $slogd
+echo
+
+## 
+# NTP
+##
+echo "=================================================="
+echo "Add NTP config"
+echo "=================================================="
+ntp="/etc/inet/ntp.conf"
+if [ -f $ntp ];
+then
+    cp -p $ntp $ntp.$DT
+fi
+echo 'Enter Datacenter Site (jakarta bekasi cikarang cimahi cimol), or just type "other": \c'
+read ntpsrv
+if [ $ntpsrv = jakarta ]; then
+        echo "server 10.10.10.1" > $ntp
+elif [ $ntpsrv = bekasi ] || [ $ntpsrv = cikarang ] || [ $ntpsrv = cimahi ]; then
+        echo "server 10.10.10.2 > $ntp
+elif [ $ntpsrv = cimol ]; then
+        echo "server 10.11.11.1" > $ntp
+elif [ $ntpsrv = other ]; then
+        echo "server 10.12.12.1" >  $ntp
+fi
+echo "driftfile /var/ntp/ntp.drift" >> $ntp
+echo "statsdir /var/ntp/ntpstats" >> $ntp
+echo "filegen peerstats  file peerstats  type day enable" >> $ntp
+echo "filegen loopstats  file loopstats  type day enable" >> $ntp
+echo "filegen clockstats file clockstats type day enable" >> $ntp
+echo "keys /etc/inet/ntp.keys" >> $ntp
+echo "trustedkey 1 2" >> $ntp
+echo "enable auth" >> $ntp
+
+chmod 600 $ntp
+chown root:root $ntp
+# ntp.keys
+nkey="/etc/inet/ntp.keys"
+if [ -f $nkey ];
+then
+	cp -p $nkey $nkey.$DT
+else
+	echo "1 M anotherKEY9" >  $nkey
+fi
+chmod 600 $nkey
+chown root:root $nkey
+# ntp.drift
+ndrif="/var/ntp/ntp.drift"
+if [ -f $ndrif ];
+then
+	echo "[NOTE] ntp.drift exists!"
+else
+	touch /var/ntp/ntp.drift
+fi 
+echo "Starting NTP"
+# Starting NTP
+/usr/sbin/svcadm -v clear ntp
+/usr/sbin/svcadm -v enable ntp
+/usr/sbin/svcadm -v restart ntp
+sleep 1
+echo
+/usr/sbin/ntpq -p
+echo
+sleep 2
+
+##
+# Disable rlogin, rexec, ftp, shell
+##
+echo "=================================================="
+echo "Disable unused services"
+echo "=================================================="
+/usr/sbin/svcadm -v disable svc:/network/login:rlogin
+/usr/sbin/svcadm -v disable svc:/network/rexec:default
+/usr/sbin/svcadm -v disable svc:/network/shell:default
+/usr/sbin/svcadm -v disable svc:/network/ftp:default
+echo
+
+##
+# SUID and SGID
+##
+echo "=================================================="
+echo "Fix SUID"
+echo "=================================================="
+for suids in /usr/bin/eject /usr/bin/fdformat /usr/bin/volrmmount /usr/bin/rdist \
+/usr/bin/rdist /usr/bin/rlogin /usr/bin/rsh /usr/bin/ct /usr/bin/lpset /usr/lib/fs/ufs/ufsdump \
+/usr/lib/fs/ufs/ufsrestore /usr/lib/fbconfig/SUNWifb_config /usr/openwin/bin/sys-suspend /usr/sbin/sacadm \
+/usr/sbin/traceroute /usr/sbin/allocate /usr/sbin/afbconfig /usr/sbin/pmconfig /usr/sbin/pgxconfig /usr/sbin/m64config \
+/usr/sbin/ffbconfig /usr/dt/bin/dtaction /usr/dt/bin/sdtcm_convert /usr/dt/bin/dtprintinfo /etc/lp/alerts/printer
+do 
+	chmod u-s $suids
+done
+echo
+echo "=================================================="
+echo "Fix GUID"
+echo "=================================================="
+for guids in /usr/openwin/bin/Xsun
+do
+	chmod g-s $guids
+done
+echo
+
+## 
+# NDD Config
+##
+echo "=================================================="
+echo "Additional network parameter modifications"
+echo "=================================================="
+aadc="/etc/rc3.d/S98ndd-ipirearp"
+echo "#!/sbin/sh                                          " > $aadc
+echo "# Additional config for ndd to follow CISA          " >> $aadc
+echo "/usr/sbin/ndd -set /dev/ip ip_ire_arp_interval 60000" >> $aadc
+chmod 744 $aadc
+chown root:sys $aadc
+/usr/sbin/ndd -set /dev/ip ip_ire_arp_interval 60000
+echo
+
+##
+# Syslog.conf
+##
+echo "=================================================="
+echo "Logging Configurations"
+echo "=================================================="
+slog="/etc/syslog.conf"
+cp -p $slog $slog.$DT
+echo "# Syslog Configuration Hardening" > $slog
+printf "\n*.err;kern.notice;auth.notice	\t\t /dev/sysmsg" >> $slog
+printf "\n*.err;kern.debug;daemon.notice;mail.crit \t /var/adm/messages" >> $slog
+printf "\n*.alert \t\t\t\t\t root" >> $slog
+printf "\n*.emerg \t\t\t\t\t *" >> $slog
+printf "\nmail.debug \t\t\t\t\t /var/log/syslog" >> $slog
+printf "\n*.alert;kern.err;daemon.err \t\t\t root,operator" >> $slog
+printf "\nauth.info \t\t\t\t\t /var/log/authlog" >> $slog
+printf "\n*.crit \t\t\t\t\t\t /var/log/critical" >> $slog
+printf "\n*.notice \t\t\t\t\t /var/log/notice" >> $slog
+#
+touch /var/log/critical
+touch /var/log/notice
+chmod 600 /var/log/critical
+chmod 600 /var/log/notice
+echo
+echo "Restart Syslog"
+/usr/sbin/svcadm -v restart system-log
+sleep 1
+echo
+echo
+echo "Post Hardening Completed..."
+echo
+echo
+##
+# Reboot
+echo "Starting Reboot Server *Optional"
+echo "Do you wish to continue? (yes/no)"
+read yn
+while true; do
+    case $yn in
+        [Yy]* ) cd /;sync;sync;init 6; break;;
+        [Nn]* ) exit;;
+        * ) echo "Please answer yes or no.";;
+    esac
+done
